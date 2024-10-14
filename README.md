@@ -1,1 +1,1 @@
-# QueST
+# QueST: Querying Functional and Structural Niches on Spatial Transcriptomics Data via Contrastive Subgraph Emebedding
