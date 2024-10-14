@@ -1,0 +1,50 @@
+{
+    "model_path": null,
+    "device": "cuda:0",
+    "library_key": "library_id",
+    "model_k": 3,
+    "shuffle_min_k": [
+        3
+    ],
+    "shuffle_max_k": [
+        3
+    ],
+    "fix_portion": [
+        0.02
+    ],
+    "min_shuffle_ratio": 0.25,
+    "max_shuffle_ratio": 0.75,
+    "pooling": "mean",
+    "enc_dims": [
+        2048,
+        256,
+        32
+    ],
+    "dec_dims": [
+        32
+    ],
+    "batch_discriminator_dims": [
+        32,
+        32,
+        16
+    ],
+    "dec_batch_dim": 2,
+    "batch_num": 2,
+    "lr": 0.001,
+    "norm": "batchnorm",
+    "dropout": 0.1,
+    "activation": "relu",
+    "weight_decay": 0.0005,
+    "epochs": 5,
+    "ckpt_epoch": 1,
+    "lbd_positive": 1,
+    "lbd_negative": 1,
+    "lbd_batch": 0.1,
+    "lbd_kl": 0.1,
+    "query_method": "cosine",
+    "pca": false,
+    "cca": false,
+    "scale": false,
+    "hvg": 4000,
+    "min_count": 10
+}
