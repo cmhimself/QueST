@@ -6,7 +6,7 @@ The functional or structural spatial regions within tissues, referred to as spat
 
 <div align="center">
     <figure>
-        <img src="QueST_archetecture.png" width="600">
+        <img src="QueST_archetecture.png" width="700">
         <!-- <figcaption>QueST Model Architecture</figcaption> -->
     </figure>
 </div>
