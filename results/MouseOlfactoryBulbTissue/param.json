@@ -36,7 +36,7 @@
     "activation": "relu",
     "weight_decay": 0.0005,
     "epochs": 5,
-    "ckpt_epoch": 1,
+    "ckpt_epoch": 5,
     "lbd_positive": 1,
     "lbd_negative": 1,
     "lbd_batch": 0.1,
