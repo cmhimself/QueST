@@ -43,7 +43,7 @@ graphcompass             0.2.2
 
     1. Construct the spatial proximity graphs and preprocess the gene expression data;
     2. Train QueST model on the entire dataset;
-    <!-- 3. Computing cosine similarity between the query niche and the reference niches for query with the QueST's latent subgraph representation. -->
+    3. Computing cosine similarity between the query niche and the reference niches for query with the QueST's latent subgraph representation.
 
 - For more details, we offer a demonstration of applying QueST to the DLPFC dataset in `demo_DLPFC.ipynb`.
 
