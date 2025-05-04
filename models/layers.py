@@ -3,73 +3,13 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch import tensor
-from torch_geometric.nn.conv import GCNConv, GATConv, GINConv
-from torch.nn import BatchNorm1d
+from torch_geometric.nn import GINConv
 from models.model_utils import create_norm, create_activation
-from torch.autograd import Function
 logger = logging.getLogger(__name__)
 
 
-class GNNLayers(nn.Module):
-    def __init__(self, layer_dim, dropout, norm='batchnorm', activation='relu', last_norm=False):
-        super().__init__()
-        self.layer_dim = layer_dim
-        self.num_layers = len(layer_dim) - 1
-        self.gnn_layers = torch.nn.ModuleList()
-        self.dropout = dropout
-        self.norm = norm
-        self.activation = create_activation(activation)
-        self.norm_layers = torch.nn.ModuleList()  # For batch normalization layers
-        for i in range(self.num_layers):
-            if i == self.num_layers - 1:
-                if last_norm:
-                    self.norm_layers.append(create_norm(self.norm)(layer_dim[i + 1]))
-                else:
-                    self.norm_layers.append(nn.Identity())
-            else:
-                self.norm_layers.append(create_norm(self.norm)(layer_dim[i + 1]))
-
-    def forward(self, inputs, edge_index):
-        h = inputs
-        for l in range(self.num_layers):
-            h = self.gnn_layers[l](h, edge_index)
-            h = self.norm_layers[l](h)
-            h = self.activation(h)
-            h = F.dropout(h, p=self.dropout, training=self.training)
-        return h
-
-
-class GCNLayers(GNNLayers):
-    def __init__(self, layer_dim, dropout, norm, activation, last_norm):
-        super().__init__(layer_dim=layer_dim, dropout=dropout, norm=norm, activation=activation, last_norm=last_norm)
-        for i in range(self.num_layers):
-            self.gnn_layers.append(GCNConv(layer_dim[i], layer_dim[i + 1]))
-
-
-class GATLayers(GNNLayers):
-    def __init__(self, layer_dim, dropout, norm, activation, last_norm, heads=2):
-        super().__init__(layer_dim=layer_dim, dropout=dropout, norm=norm, activation=activation, last_norm=last_norm)
-        for i in range(self.num_layers):
-            self.gnn_layers.append(GATConv(layer_dim[i], layer_dim[i + 1] // heads, heads=heads))
-
-
-class GINLayers(GNNLayers):
-    def __init__(self, layer_dim, dropout, norm, activation, last_norm):
-        super().__init__(layer_dim=layer_dim, dropout=dropout, norm=norm, activation=activation, last_norm=last_norm)
-        for i in range(self.num_layers):
-            mlp = torch.nn.Sequential(
-                torch.nn.Linear(layer_dim[i], (layer_dim[i] + layer_dim[i + 1]) // 2),
-                create_norm(norm)((layer_dim[i] + layer_dim[i + 1]) // 2),
-                self.activation,
-                torch.nn.Linear((layer_dim[i] + layer_dim[i + 1]) // 2, layer_dim[i + 1]),
-                create_norm(norm)(layer_dim[i + 1]),
-                self.activation,
-            )
-            self.gnn_layers.append(GINConv(mlp))
-
-
-
 class NodeTransform(nn.Module):
+    """update node feature with MLP, BN and ReLU"""
     def __init__(self, mlp, norm="batchnorm", activation="relu"):
         super(NodeTransform, self).__init__()
         self.mlp = mlp
@@ -87,7 +27,7 @@ class NodeTransform(nn.Module):
         h = self.norm(h)
         h = self.act(h)
         return h
-    
+
 
 class MLP(nn.Module):
     def __init__(self, layer_dim=[], norm="batchnorm", activation="relu"):
@@ -141,7 +81,7 @@ class BatchDiscriminator(nn.Module):
         return self.layers(x)
 
 
-class BatchTransform(nn.Module):
+class BatchEncoder(nn.Module):
     def __init__(self, layer_dim=[], norm='no norm', activation="relu"):
         super().__init__()
         mlp = MLP(layer_dim=layer_dim, norm=norm, activation=activation)
@@ -151,27 +91,59 @@ class BatchTransform(nn.Module):
         return self.layers(x)
 
 
-class RevGradFunc(Function):
-    @staticmethod
-    def forward(ctx, input_, alpha_):
-        ctx.save_for_backward(input_, alpha_)
-        output = input_
-        return output
+class GNNLayers(nn.Module):
+    def __init__(self, layer_dim, dropout, norm='batchnorm', activation='elu', last_norm=False, res=False):
+        super().__init__()
+        self.layer_dim = layer_dim
+        self.num_layers = len(layer_dim) - 1
+        self.gnn_layers = torch.nn.ModuleList()
+        self.dropout = dropout
+        self.norm = norm
+        self.activation = create_activation(activation)
+        self.norm_layers = torch.nn.ModuleList()  # For batch normalization layers
+        self.proj_layers = nn.ModuleList()
+        self.res = res
+        for i in range(self.num_layers):
+            if i == self.num_layers - 1:
+                if last_norm:
+                    self.norm_layers.append(create_norm(self.norm)(layer_dim[i + 1]))
+                else:
+                    self.norm_layers.append(nn.Identity())
+            else:
+                self.norm_layers.append(create_norm(self.norm)(layer_dim[i + 1]))
 
-    @staticmethod
-    def backward(ctx, grad_output): 
-        grad_input = None
-        _, alpha_ = ctx.saved_tensors
-        if ctx.needs_input_grad[0]:
-            grad_input = -grad_output * alpha_
-        return grad_input, None
+            if res and layer_dim[i] != layer_dim[i + 1]:
+                self.proj_layers.append(nn.Linear(layer_dim[i], layer_dim[i + 1]))
+            else:
+                self.proj_layers.append(None)
+
+    def forward(self, inputs, edge_index):
+        h = inputs
+        for l in range(self.num_layers):
+            if self.res:
+                h_new = self.gnn_layers[l](h, edge_index)
+                if self.proj_layers[l] is not None:
+                    h = self.proj_layers[l](h)  # Project to match dimensions
+                h = h_new + h
+            else:
+                h = self.gnn_layers[l](h, edge_index)
+            h = self.norm_layers[l](h)
+            h = self.activation(h)
+            h = F.dropout(h, p=self.dropout, training=self.training)
+        return h
 
 
-class RevGrad(nn.Module):
-    def __init__(self, alpha=1., *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self._alpha = tensor(alpha, requires_grad=False)
-
-    def forward(self, input_):
-        return RevGradFunc.apply(input_, self._alpha)
-
+class GINLayers(GNNLayers):
+    def __init__(self, layer_dim, dropout, norm, activation, last_norm, res=False):
+        super().__init__(layer_dim=layer_dim, dropout=dropout, norm=norm, activation=activation, last_norm=last_norm, res=res)
+        for i in range(self.num_layers):
+            mlp = torch.nn.Sequential(
+                torch.nn.Linear(layer_dim[i], (layer_dim[i] + layer_dim[i + 1]) // 2),
+                create_norm(norm)((layer_dim[i] + layer_dim[i + 1]) // 2),
+                self.activation,
+                torch.nn.Linear((layer_dim[i] + layer_dim[i + 1]) // 2, layer_dim[i + 1]),
+                create_norm(norm)(layer_dim[i + 1]),
+                self.activation,
+            )
+            self.gnn_layers.append(GINConv(mlp))
+            

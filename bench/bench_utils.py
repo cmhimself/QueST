@@ -14,6 +14,18 @@ import squidpy as sq
 logger = logging.getLogger(__name__)
 
 
+color_simulation = {
+    "B-cells": "#ff7f0e", 
+    "Cancer/Epithelial": "#d62728", 
+    "Endothelial": "#279e68", 
+    "T-cells": "#1f77b4",
+    "Monocytes/Macrophages": "#aa40fc",
+    "Type-1": "#008080",
+    "Type-2": "#ff8744",
+    "Else": "#bebebe", 
+}
+
+
 color_dlpfc = {
     'Layer1': '#9467bd',
     'Layer2': '#8c564b',
@@ -25,6 +37,24 @@ color_dlpfc = {
     'Else':   '#440256'
 }
 
+color_mobt_manual = {
+    'ONL':  '#1f77b4',
+    'GL':   '#ff7f0e',
+    'GCL':  '#2ca02c',
+    'EPL':  '#d62728',
+    'MCL':  '#e377c2',
+    'Else': '#440256'
+}
+
+color_mobt_auto = {
+    'EPL':  '#1f77b4',
+    'GCL':  '#ff7f0e',
+    'GL':   '#2ca02c',
+    'MCL':  '#d62728',
+    'ONL':  '#9467bd',
+    'Else': '#440256'
+}
+
 color_mobt = {
     'EPL':  '#1f77b4',
     'ONL':  '#ff7f0e',
@@ -34,10 +64,40 @@ color_mobt = {
     'Else': '#440256'
 }
 
+color_sim_tme = {
+    'B-cells': '#1f77b4',
+    'Cancer/Epithelial': '#ff7f0e',
+    'Endothelial': '#2ca02c',
+    'Monocytes/Macrophages': '#d62728',
+    'T-cells': '#9467bd'
+}
+
+color_nsclc = {}
+
+
+def check_raw_batch(adata_list, batch_key='batch'):
+    combined_adata = adata_list[0].concatenate(*adata_list[1:], batch_key=batch_key)
+
+    # Normalize and scale the combined data
+    print("normalizing data")
+    sc.pp.normalize_total(combined_adata)
+    sc.pp.log1p(combined_adata)
+    sc.pp.scale(combined_adata)
+
+    print("performing pca")
+    sc.tl.pca(combined_adata, n_comps=50)
+
+    # Perform UMAP visualization
+    print("finding neighbors")
+    sc.pp.neighbors(combined_adata, use_rep='X_pca')
+    print("computing umap")
+    sc.tl.umap(combined_adata)
+    sc.pl.umap(combined_adata, color=batch_key, title="UMAP of Raw Data")
+
 
 def get_time_str():
     t = time.localtime()
-    time_str = f"{t.tm_year}/{t.tm_mon}/{t.tm_mday} {t.tm_hour}:{t.tm_min}:{t.tm_sec}"
+    time_str = f"{t.tm_year}/{t.tm_mon:02d}/{t.tm_mday:02d} {t.tm_hour:02d}:{t.tm_min:02d}:{t.tm_sec:02d}"
     return time_str
 
 
@@ -101,11 +161,17 @@ def visualize_subgraph(adata, subgraph_nodes, spot_size=10, subgraph_key='subgra
     plt.show()
 
 
-def visualize_niche(adata, niche_ind, niche_name, cell_type_key='cell_type', spot_size=5, invert_y=False, title=None, save_path=None, ckpt_epoch=None, show=True):
+def visualize_niche(adata, niche_ind, niche_name, cell_type_key='cell_type', spot_size=5, invert_y=False, title=None, save_path=None, show=True, dataset=None):
     # if f'{niche_name}_cell_type' not in adata.obs.columns:
     #     adata.obs[f'{niche_name}_cell_type'] = pd.Categorical([adata.obs[cell_type_key][i] if i in niche_ind else 'Else' for i in range(adata.n_obs)])
     adata.obs[f'{niche_name}_cell_type'] = pd.Categorical([adata.obs[cell_type_key][i] if i in niche_ind else 'Else' for i in range(adata.n_obs)])
-    sc.pl.spatial(adata, color=f'{niche_name}_cell_type', spot_size=spot_size, show=False, title=niche_name if title is None else title)
+    if dataset is None:
+        sc.pl.spatial(adata, color=f'{niche_name}_cell_type', spot_size=spot_size, show=False, title=niche_name if title is None else title)
+    elif dataset == "DLPFC":
+        palette = color_dlpfc
+        sc.pl.spatial(adata, color=f'{niche_name}_cell_type', spot_size=spot_size, show=False, title=niche_name if title is None else title, palette=palette)
+    else:
+        assert False
     if invert_y:
         plt.gca().invert_yaxis()
     if save_path is not None:
@@ -232,15 +298,28 @@ def find_spots_in_ellipse(adata, anchor_list, cell_type_list, start, step, num_l
 
 
 def construct_adata_spatial_graph(adata, dataset, library_key=None):
+    if dataset == "ccRCC-NSCLC":
+        if adata.uns['library_id'].startswith('nsclc'):
+            dataset = 'nsclc'
+        else:
+            dataset = "DLPFC"
     if dataset == "DLPFC":
         sq.gr.spatial_neighbors(adata, coord_type='grid', library_key=library_key)
     elif dataset == 'MouseOlfactoryBulbTissue':
-        if adata.uns['library_id'] in ['10x', 'stereoseq']:
+        if adata.uns['library_id'] in ['10X', 'Stereo-seq']:
             sq.gr.spatial_neighbors(adata, coord_type='grid', library_key=library_key)
-        elif adata.uns['library_id'] == 'slidev2':
+        elif adata.uns['library_id'] == 'Slide-seq V2':
             sq.gr.spatial_neighbors(adata, coord_type='generic', delaunay=True, radius=(0, 100), library_key=library_key)
             # G = nx.from_scipy_sparse_array(adata.obsp['spatial_connectivities'])
             # visualize_graph(adata, G, title="delaunay radius 120"), exit()
+    elif dataset == 'MERFISH':
+        sq.gr.spatial_neighbors(adata, coord_type='generic', delaunay=True, library_key=library_key)  # TODO: select radius
+    elif dataset == "Simulation":
+        sq.gr.spatial_neighbors(adata, coord_type='generic', delaunay=True, radius=(0, 5), library_key=library_key)
+    elif dataset == "nsclc":
+        sq.gr.spatial_neighbors(adata, coord_type='generic', delaunay=True, radius=(0, 300), library_key=library_key)
+        # G = nx.from_scipy_sparse_array(adata.obsp['spatial_connectivities'])
+        # visualize_graph(adata, G, title="delaunay radius 5"), exit()
     else:
         assert False, f"Unknown dataset {dataset}!"
 
@@ -253,16 +332,18 @@ def construct_adata_list_spatial_graph(adata_list, dataset, library_key=None):
 def construct_merged_graph(adata, dataset, library_key='library_id', query_ref=None, adata_query_ref_list=None):
     if dataset == 'DLPFC':
         sq.gr.spatial_neighbors(adata, library_key=library_key, coord_type='grid')
+    elif dataset == 'MERFISH':
+        sq.gr.spatial_neighbors(adata, library_key=library_key, coord_type='generic', delaunay=True)
     elif dataset == 'MouseOlfactoryBulbTissue':
         assert len(query_ref) == 2 and len(adata_query_ref_list) == 2
         query_id, ref_id = query_ref
-        assert query_id == 'stereoseq', query_id
+        assert query_id == 'Stereo-seq', query_id
         adata_q, adata_ref = adata_query_ref_list
         sq.gr.spatial_neighbors(adata_q, library_key=library_key, coord_type='grid')
         connectivities_q = adata_q.obsp['spatial_connectivities']
-        if ref_id == '10x':
+        if ref_id == '10X':
             sq.gr.spatial_neighbors(adata_ref, library_key=library_key, coord_type='grid')
-        elif ref_id == 'slidev2':
+        elif ref_id == 'Slide-seq V2':
             sq.gr.spatial_neighbors(adata_ref, library_key=library_key, coord_type='generic', delaunay=True)
         else:
             assert False, 'Unknown ref data!'
@@ -290,11 +371,13 @@ def show_plot_with_timeout(timeout):
 
 def save_project_code(source_dir, output_zip, save_logger=None):
     with zipfile.ZipFile(output_zip, 'w', zipfile.ZIP_DEFLATED) as zipf:
-        for root, dirs, files in os.walk(source_dir):  # Walk through the source directory
+        # Walk through the source directory
+        for root, dirs, files in os.walk(source_dir):
             for file in files:
                 if file.endswith('.py'):
                     file_path = os.path.join(root, file)
-                    zipf.write(file_path, os.path.relpath(file_path, source_dir))  # Write file to zip archive
+                    # Write file to zip archive, using relative path
+                    zipf.write(file_path, os.path.relpath(file_path, source_dir))
 
     if save_logger is not None:
         save_logger.info(f"saving source code to {output_zip}")

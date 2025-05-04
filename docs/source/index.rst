@@ -17,5 +17,8 @@ Contents
 .. toctree::
 
    installation.md
-   Tutorial1.ipynb
+   Tutorial 1 Querying niches on simulation data.ipynb
+   Tutorial 2 Niche query benchmark on DLPFC dataset.ipynb
+   Tutorial 3 Querying niches across different technologies.ipynb
+   Tutorial 4 Analyze Tertiary Lymphoid Structures on ccRCC.ipynb
    API reference.md
