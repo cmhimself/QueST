@@ -25,6 +25,6 @@ These dependencies will be automatically installed along with QueST.
 QueST is available on PyPI and can be installed via
 
 ```
-pip install quest-spatial
+pip install quest-niche
 ```
 
