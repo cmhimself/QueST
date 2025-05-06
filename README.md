@@ -6,7 +6,7 @@ Cells in multicellular organisms coordinate within tissues to form spatial niche
 
 <div align="center">
     <figure>
-        <img src="QueST_archetecture.png" width="900">
+        <img src="./docs/source/QueST_archetecture.png" width="900">
         <!-- <figcaption>QueST Model Architecture</figcaption> -->
     </figure>
 </div>
