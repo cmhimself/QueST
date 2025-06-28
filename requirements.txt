@@ -1,0 +1,27 @@
+torch==2.2.1
+torchvision==0.17.1
+torchaudio==2.2.1
+
+# Specify versions for PyG
+--find-links https://data.pyg.org/whl/torch-2.2.1+cu121.html
+
+torch-scatter==2.1.2
+torch-sparse==0.6.18
+torch-cluster==1.6.3
+torch-spline-conv==1.2.2
+torch-geometric==2.5.2
+
+# Other dependencies for utilities
+numpy==1.23.4
+pandas==2.2.1
+scipy==1.9.1
+scanpy==1.9.8
+squidpy==1.4.1
+networkx==3.2.1
+scikit-learn==1.4.1.post1
+umap-learn==0.5.5
+anndata==0.10.6
+leidenalg==0.10.2
+igraph==0.11.4
+graphcompass==0.2.2
+jupyter

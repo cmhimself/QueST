@@ -1,2 +1,4 @@
 *.pth
 /data/*
+/dist
+*.egg-info
