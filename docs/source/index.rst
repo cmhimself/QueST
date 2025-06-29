@@ -8,7 +8,7 @@ Querying functional and structural niches on spatial transcriptomics data
 Overview
 --------
 
-.. image:: QueST_archetecture.png
+.. image:: QueST_architecture.png
    :width: 700px
    :align: center
 

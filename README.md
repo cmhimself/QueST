@@ -6,7 +6,7 @@ Cells in multicellular organisms coordinate to form functional and structural ni
 
 <div align="center">
     <figure>
-        <img src="./docs/source/QueST_archetecture.png" width="900">
+        <img src="./docs/source/QueST_architecture.png" width="900">
         <!-- <figcaption>QueST Model Architecture</figcaption> -->
     </figure>
 </div>
@@ -14,29 +14,24 @@ Cells in multicellular organisms coordinate to form functional and structural ni
 
 ## Getting started
 
-### Dependencies
+### Installation
 
-```
-python                   3.9.19
-numpy                    1.23.4
-scanpy                   1.9.8
-squidpy                  1.4.1
-anndata                  0.10.6
-scikit-learn             1.4.1
-networkx                 3.2.1
-torch                    2.2.1
-torch-geometric          2.5.2
-torch-scatter            2.1.2
-torch-sparse             0.6.18
-torch-spline-conv        1.2.2
-graphcompass             0.2.2
+We recommend using a conda environment
+
+```bash
+conda create -n quest python==3.9.19
 ```
 
-### Installation via PyPI
+Install necessary dependencies first before the installation of QueST
 
-QueST is available on PyPI and can be installed via 
-
+```bash
+conda activate quest
+pip install -r requirements.txt
 ```
+
+Finally, QueST is available on PyPI and can be installed via 
+
+```bash
 pip install quest-niche
 ```
 

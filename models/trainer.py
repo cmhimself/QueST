@@ -6,9 +6,9 @@ import argparse
 import numpy as np
 import scanpy as sc
 import torch_geometric
-from codebase.models.model import QueST
-import codebase.models.model_utils as model_utils  # TODO: delete codebase
-import codebase.bench.bench_utils as bench_utils  # TODO: delete codebase
+from models.model import QueST
+import models.model_utils as model_utils
+import bench.bench_utils as bench_utils
 logger = logging.getLogger(__name__)
 
 
