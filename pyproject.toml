@@ -4,10 +4,9 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "quest-niche"
-version = "0.1.2"
+version = "0.1.4"
 description = "Querying functional and structural niches on spatial transcriptomics data"
-readme = "README.md"
-readme-content-type = "text/markdown"
+readme = { file = "README.md", content-type = "text/markdown" }
 authors = [
   { name = "Mo Chen", email = "mochenthu@gmail.com" }
 ]
@@ -36,6 +35,8 @@ dependencies = [
   "torch-geometric>=2.5.2",
 ]
 
-[tool.setuptools.packages.find]
-where = ["models", "bench"]  # map models/ and bench/ to quest and quest.bench
-include = ["*"]
+[tool.setuptools]
+# map models/ and bench/ to quest and quest.bench
+package-dir = { "quest" = "models", "quest.bench" = "bench" }
+packages    = ["quest", "quest.bench"]
+
