@@ -41,4 +41,4 @@ See detailed usage on [Read the Docs](https://quest-niche.readthedocs.io/en/late
 
 ## Data Availability
 
-- For complete reference datasets and pretrained model weights, please refer to https://drive.google.com/drive/folders/1kQqReo7Groy4WMDjT2JNHzN6tXPSHrtf?usp=sharing
+- For complete reference datasets and pretrained model weights, please refer to https://doi.org/10.6084/m9.figshare.29432396.v1
