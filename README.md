@@ -6,7 +6,7 @@ Cells in multicellular organisms coordinate to form functional and structural ni
 
 <div align="center">
     <figure>
-        <img src="./docs/source/QueST_architecture.png" width="900">
+        <img src="https://github.com/cmhimself/QueST/raw/main/docs/source/QueST_architecture.png" width="900">
         <!-- <figcaption>QueST Model Architecture</figcaption> -->
     </figure>
 </div>

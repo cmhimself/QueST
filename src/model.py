@@ -4,8 +4,8 @@ import torch.nn as nn
 import torch.nn.functional as F
 from copy import deepcopy
 from torch_geometric.data import Data, Batch
-from models.layers import BilinearDiscriminator, BatchDiscriminator, BatchEncoder, GINLayers
 from torch_geometric.nn.pool import global_mean_pool
+from .layers import BilinearDiscriminator, BatchDiscriminator, BatchEncoder, GINLayers
 logger = logging.getLogger(__name__)
 
 

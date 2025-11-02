@@ -6,16 +6,15 @@ import argparse
 import numpy as np
 import scanpy as sc
 import torch_geometric
-from models.model import QueST
-import models.model_utils as model_utils
-import bench.bench_utils as bench_utils
+from . import utils
+from .model import QueST
 logger = logging.getLogger(__name__)
 
 
 class QueSTTrainer:
     def __init__(self, dataset, data_path, sample_ids, adata_list, query_sample_id=None, query_niches=None, 
                  save_model=True, model_path='', embedding_folder='', epochs=20, hvg=None, min_count=0, 
-                 normalize=True, k=3):  
+                 normalize=True, k=3, seed=None):  
         self.k = k
         self.hvg = hvg
         self.epochs = epochs
@@ -32,7 +31,7 @@ class QueSTTrainer:
         self.sub_edge_ind_sample_list = None
         self.batch_label_list = None
 
-        logger.info(f"QueST Trainer initialized, loading data, time: {bench_utils.get_time_str()}")
+        logger.info(f"QueST Trainer initialized, loading data, time: {utils.get_time_str()}")
         self.sample_id_list = sample_ids
         self.adata_list = adata_list
 
@@ -45,18 +44,21 @@ class QueSTTrainer:
         
         self.query_sample_id = query_sample_id
         self.niche_prefix_list = query_niches
-        logger.info(f"Data loaded with {len(self.adata_list)} adata objects, time: {bench_utils.get_time_str()}")
+        logger.info(f"Data loaded with {len(self.adata_list)} adata objects, time: {utils.get_time_str()}")
         self.model_param['batch_num'] = len(self.adata_list)
         self.model_path = model_path
         self.embedding_folder = embedding_folder
+        if seed is not None:
+            self.model_param['seed'] = seed
+            utils.fix_seed(self.model_param['seed'])
 
     def get_params(self):
-        logger.info(f"Processing arguments, time: {bench_utils.get_time_str()}")
+        logger.info(f"Processing arguments, time: {utils.get_time_str()}")
         parser = argparse.ArgumentParser(description='Process QueST Parameters.')
         model_param_group_name, other_param_group_name = 'model params', 'other params'
         model_param_group = parser.add_argument_group(model_param_group_name)
 
-        model_param_group.add_argument('--seed', type=int, default=2025)
+        model_param_group.add_argument('--seed', type=int, default=2024)
         model_param_group.add_argument('--model-path', type=str, default=None)
         model_param_group.add_argument('--device', type=str, default='cuda:0')
         model_param_group.add_argument('--library_key', type=str, default='library_id')
@@ -96,8 +98,8 @@ class QueSTTrainer:
 
         # args = parser.parse_args()
         args = parser.parse_args([])
-        logger.info(f"using GPU {args.gpu_id}")
-        os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu_id
+        # logger.info(f"using GPU {args.gpu_id}")
+        # os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu_id
         args_dict = vars(args)
 
         group_dicts = {}
@@ -119,7 +121,7 @@ class QueSTTrainer:
                 adata = self.adata_list[i]
                 feature, edge_index, batch_label = self.feature_list[i], self.edge_ind_list[i], self.batch_label_list[i]
                 sub_node_list, sub_edge_ind_list = self.sub_node_sample_list[i], self.sub_edge_ind_sample_list[i]
-                logger.info(f"Epoch: {epoch}, Batch: {batch_idx + 1}/{len(self.adata_list)}, Sample: {adata.uns['library_id']}, Time: {bench_utils.get_time_str()}")
+                logger.info(f"Epoch: {epoch}, Batch: {batch_idx + 1}/{len(self.adata_list)}, Sample: {adata.uns['library_id']}, Time: {utils.get_time_str()}")
                 for gan_step in ['disc', 'gen']:
                     if gan_step == 'disc':
                         logger.info("********** discriminator step **********")
@@ -130,13 +132,13 @@ class QueSTTrainer:
                     elif gan_step == 'gen':
                         logger.info("********** generator step **********")
                         batch_label_fuzzy = torch.full_like(batch_label, 1 / self.model_param['batch_num']).to(self.model_param['device'])
-                        min_k, max_k, fix_portion = model_utils.get_shuffle_param(self.model_param, i, len(self.adata_list))
+                        min_k, max_k, fix_portion = utils.get_shuffle_param(self.model_param, i, len(self.adata_list))
                         
-                        adata_shf, fixed_center, fixed_nodes, shuffle_center, feature_shf = model_utils.shuffle(adata, dataset=self.dataset, feature=feature,
-                                                                                                                min_k=min_k, max_k=max_k, fix_portion=fix_portion,
-                                                                                                                min_shuffle_ratio=self.model_param['min_shuffle_ratio'],
-                                                                                                                max_shuffle_ratio=self.model_param['max_shuffle_ratio'],
-                                                                                                                sub_node_list=sub_node_list)
+                        adata_shf, fixed_center, fixed_nodes, shuffle_center, feature_shf = utils.shuffle(adata, dataset=self.dataset, feature=feature,
+                                                                                                          min_k=min_k, max_k=max_k, fix_portion=fix_portion,
+                                                                                                          min_shuffle_ratio=self.model_param['min_shuffle_ratio'],
+                                                                                                          max_shuffle_ratio=self.model_param['max_shuffle_ratio'],
+                                                                                                          sub_node_list=sub_node_list)
                         shuffle_center_sampled = np.random.choice(shuffle_center, size=len(fixed_center), replace=False)
                         z, z_shf, recon, logits_positive, logits_negative, logits_batch = self.model(
                             feature, feature_shf, edge_index, sub_node_list, sub_edge_ind_list, fixed_center, shuffle_center_sampled, batch_label)
@@ -154,7 +156,7 @@ class QueSTTrainer:
         return q_id, q_niche_mask
 
     def query(self, q_id, q_niche_mask, q_niche_name):
-        logger.info(f"Performing query: q_id={q_id}, q_niche={q_niche_name}, time: {bench_utils.get_time_str()}")
+        logger.info(f"Performing query: q_id={q_id}, q_niche={q_niche_name}, time: {utils.get_time_str()}")
 
         feat_q = self.feature_list[self.sample_id_list.index(q_id)]
         edge_ind_q = self.edge_ind_list[self.sample_id_list.index(q_id)]
@@ -166,7 +168,6 @@ class QueSTTrainer:
         sub_node_ref_list = [self.sub_node_sample_list[i] for i in range(len(self.sub_node_sample_list)) if self.sample_id_list[i] != q_id]
         sub_edge_ind_ref_list = [self.sub_edge_ind_sample_list[i] for i in range(len(self.sub_edge_ind_sample_list)) if self.sample_id_list[i] != q_id]
 
-        
         with torch.no_grad():
             for ref_id, adata_ref, feat_ref, edge_ind_ref, sub_node_ref, sub_edge_ind_ref \
             in zip(self.ref_id_list, self.adata_ref_list, feat_ref_list, edge_ind_ref_list, sub_node_ref_list, sub_edge_ind_ref_list):
@@ -175,7 +176,7 @@ class QueSTTrainer:
                 adata_ref.obs[f'{q_niche_name} predicted matching score'] = cosine_sim
 
     def get_embedding(self):
-        logger.info(f"Saving niche embeddings for each sample, time: {bench_utils.get_time_str()}")
+        logger.info(f"Saving niche embeddings for each sample, time: {utils.get_time_str()}")
         with torch.no_grad():
             for i, (data_id, adata, feat, edge_ind, sub_node, sub_edge_ind) in enumerate(zip(self.sample_id_list, self.adata_list, self.feature_list, self.edge_ind_list,
                                                                                                 self.sub_node_sample_list, self.sub_edge_ind_sample_list)):
@@ -183,24 +184,41 @@ class QueSTTrainer:
                 _, z = self.model.get_subgraph_rep(feat, edge_ind, sub_node, sub_edge_ind)
                 torch.save(z, f"{self.embedding_folder}/{adata.uns['library_id']}.pt")
 
-    def train(self):
-        torch_geometric.seed.seed_everything(self.model_param['seed'])
+    def preprocess(self):
         for adata in self.adata_list:
             assert adata.uns['library_id'] is not None, "Library id must be set for each Anndata object!"
             if 'spatial_connectivities' not in adata.obsp.keys():
-                model_utils.build_graphs(adata_list=[adata], dataset=self.dataset)
+                utils.build_graphs(adata_list=[adata], dataset=self.dataset)
             else:
                 logger.info(f"adata {adata.uns['library_id']} has existing graph")
-        # model_utils.build_graphs(adata_list=self.adata_list, dataset=self.dataset)
-        model_utils.preprocess_adata(self.adata_list, param=self.model_param)
-        self.feature_list, self.edge_ind_list, self.sub_node_sample_list, self.sub_edge_ind_sample_list, self.batch_label_list = model_utils.prepare_graph_data(self.adata_list, self.model_param)
+        utils.preprocess_adata(self.adata_list, param=self.model_param)
+
+    def get_feature(self):
+        self.feature_list, self.edge_ind_list, self.sub_node_sample_list, self.sub_edge_ind_sample_list, self.batch_label_list = utils.prepare_graph_data(self.adata_list, self.model_param)
+
+    def init_model(self):
         self.model = QueST(in_dim=self.feature_list[0].shape[1], param=self.model_param, logger=logger).to(self.model_param['device'])
-        self.train_model()
-    
-    def inference(self, save_embedding=False, query=False):
-        logger.info(f"Loading model, time: {bench_utils.get_time_str()}")
+
+    def load_model(self):
+        logger.info(f"Loading model, time: {utils.get_time_str()}")
         self.model.load_state_dict(torch.load(self.model_path))
         self.model.eval()
+
+    def train(self):
+        for adata in self.adata_list:
+            assert adata.uns['library_id'] is not None, "Library id must be set for each Anndata object!"
+            if 'spatial_connectivities' not in adata.obsp.keys():
+                utils.build_graphs(adata_list=[adata], dataset=self.dataset)
+            else:
+                logger.info(f"adata {adata.uns['library_id']} has existing graph")
+        # utils.build_graphs(adata_list=self.adata_list, dataset=self.dataset)
+        utils.preprocess_adata(self.adata_list, param=self.model_param)
+        self.feature_list, self.edge_ind_list, self.sub_node_sample_list, self.sub_edge_ind_sample_list, self.batch_label_list = utils.prepare_graph_data(self.adata_list, self.model_param)
+        self.model = QueST(in_dim=self.feature_list[0].shape[1], param=self.model_param, logger=logger).to(self.model_param['device'])
+        self.train_model()
+
+    def inference(self, save_embedding=False, query=False):
+        self.load_model()
         if save_embedding:
             self.get_embedding()
         if query:

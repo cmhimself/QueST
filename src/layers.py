@@ -1,10 +1,9 @@
-import logging
 import torch
+import logging
 import torch.nn as nn
 import torch.nn.functional as F
-from torch import tensor
 from torch_geometric.nn import GINConv
-from models.model_utils import create_norm, create_activation
+from .utils import create_norm, create_activation
 logger = logging.getLogger(__name__)
 
 
