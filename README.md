@@ -1,4 +1,4 @@
-# Querying functional and structural niches on spatial transcriptomics data
+# Querying structural and functional niches on spatial transcriptomics data
 
 ## Overview
 
