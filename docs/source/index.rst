@@ -24,4 +24,6 @@ Contents
    Tutorial 2 Niche query benchmark on DLPFC dataset.ipynb
    Tutorial 3 Querying niches across different technologies.ipynb
    Tutorial 4 Analyze Tertiary Lymphoid Structures on ccRCC.ipynb
+   Tutorial 5 Querying ccRCC TLS subtypes in NSCLC.ipynb
+   Tutorial 6 De novo NOI discovery on Perturb-CAST.ipynb
    API reference.md
