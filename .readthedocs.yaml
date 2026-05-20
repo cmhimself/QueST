@@ -4,6 +4,11 @@ build:
   os: "ubuntu-22.04"
   tools:
     python: "3.10"
+  jobs:
+    pre_build:
+      # Mirror tutorial notebooks (single source at ../tutorial/) into docs/source/
+      # so Sphinx toctree can resolve them. See docs/Makefile sync-tutorials target.
+      - cp tutorial/*.ipynb docs/source/
 
 python:
   install:

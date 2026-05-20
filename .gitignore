@@ -1,6 +1,13 @@
 *.pth
+*.h5ad
 /data/*
+/results/*
 /dist
 *.egg-info
 **/__pycache__/
 **/tmp/
+.ipynb_checkpoints/
+# tutorial notebooks copied into docs/source/ at build time (single source: ../tutorial/)
+docs/source/Tutorial *.ipynb
+docs/build/
+PROVENANCE.md

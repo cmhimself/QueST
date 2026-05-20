@@ -4,13 +4,13 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "quest-niche"
-version = "0.1.5"
+version = "0.2.3"
 description = "Querying functional and structural niches on spatial transcriptomics data"
 readme = { file = "README.md", content-type = "text/markdown" }
 authors = [
   { name = "Mo Chen", email = "mochenthu@gmail.com" }
 ]
-requires-python = ">=3.8,<4.0"
+requires-python = ">=3.9,<4.0"
 license = { text = "MIT" }
 classifiers = [
   "Programming Language :: Python :: 3",
@@ -32,12 +32,11 @@ dependencies = [
   "leidenalg==0.10.2",
   "igraph==0.11.4",
   "graphcompass==0.2.2",
+  "tqdm",
   "torch>=2.2.1",
   "torch-geometric>=2.5.2",
 ]
 
 [tool.setuptools]
-# map src/ to quest
-package-dir = { "quest" = "src" }
-packages    = ["quest"]
+packages = ["quest"]
 
