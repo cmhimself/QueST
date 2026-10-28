@@ -41,4 +41,5 @@ See detailed usage on [Read the Docs](https://quest-niche.readthedocs.io/en/late
 
 ## Data Availability
 
-- For reference datasets, please refer to https://cloud.tsinghua.edu.cn/d/dbf5c914da064eedbb58/
+- For reference datasets, please refer to https://cloud.tsinghua.edu.cn/d/9bc9dcf440ba4f989583/
+- For pretrained model checkpoints, please refer to https://cloud.tsinghua.edu.cn/d/351d737fd7454e269944/
