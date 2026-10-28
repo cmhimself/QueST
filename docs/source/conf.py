@@ -5,8 +5,8 @@
 project = 'QueST'
 copyright = '2025, Mo Chen'
 author = 'Mo Chen'
-release = '0.2.0'
-version = '0.2.0'
+release = '0.2.4'
+version = '0.2.4'
 
 # -- General configuration
 

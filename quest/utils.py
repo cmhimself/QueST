@@ -561,8 +561,7 @@ def get_subgraph_embedding(model, adata_list, feature_list, edge_ind_list, group
 
     Consistent with encode_subgraph() / query niche embedding logic: average node-level
     embeddings (not pre-pooled subgraph embeddings) within each group mask. Used by
-    Tutorial 4 (ccRCC, group_key='tls_group') and Tutorial 6 (Perturb-CAST,
-    group_key='histo_annotation').
+    Tutorial 4 (ccRCC, group_key='tls_group').
 
     Args:
         group_key: column name in adata.obs that defines the grouping (e.g. 'tls_group').
@@ -1022,41 +1021,8 @@ def save_project_code(source_dir, output_zip, save_logger=None):
 
 
 # =====================================================================
-# Tutorial helpers: spot-level niche analysis (Perturb-CAST and similar)
+# Tutorial helpers: TLS embedding and cross-dataset querying
 # =====================================================================
-
-def get_global_niche_adata(trainer, group_key='histo_annotation',
-                           exclude_values=('normal_tissue',), min_count=3):
-    """Extract per-spot niche embeddings from a trained QueSTTrainer and
-    concatenate slices into one AnnData. Spots whose `obs[group_key]` is in
-    `exclude_values`, or whose group has fewer than `min_count` members, are
-    dropped. Niche embedding stored at `obsm['X_quest']`."""
-    import torch
-    import anndata as ad
-    exclude = set(exclude_values or [])
-    parts = []
-    trainer.model.eval()
-    with torch.no_grad():
-        for adata, feat, edge, sub_node, sub_edge in zip(
-                trainer.adata_list, trainer.feature_list, trainer.edge_ind_list,
-                trainer.sub_node_sample_list, trainer.sub_edge_ind_sample_list):
-            _, z_niche = trainer.model.get_subgraph_rep(feat, edge, sub_node, sub_edge)
-            emb = z_niche.cpu().numpy()
-            annots = adata.obs[group_key].values
-            valid = np.zeros(len(adata), dtype=bool)
-            for v in np.unique(annots):
-                if v in exclude:
-                    continue
-                m = annots == v
-                if m.sum() >= min_count:
-                    valid |= m
-            sub = adata[valid].copy()
-            sub.obsm['X_quest'] = emb[valid]
-            sub.obs['slice'] = adata.uns['library_id']
-            parts.append(sub)
-            logger.info(f"{adata.uns['library_id']}: {valid.sum()}/{len(adata)} spots kept")
-    return ad.concat(parts, merge='same')
-
 
 def load_pretrained_model(ckpt_path, in_dim, batch_num=1, model_k=3, device='cuda:0'):
     """Load a QueST model with the paper's canonical architecture.
@@ -1124,60 +1090,6 @@ def plot_niche_umap(adata, color, emb_key='X_quest', umap_key=None,
     plt.show()
 
 
-def get_niche_pattern(adata, n_neighbors=30, resolution=0.2, random_state=42,
-                     emb_key='X_quest', key_added='leiden'):
-    """L2-normalise `adata.obsm[emb_key]` into `obsm['X_niche']`, then run
-    cosine `sc.pp.neighbors` and `sc.tl.leiden`. Cluster id at `obs[key_added]`."""
-    from sklearn.preprocessing import normalize as l2norm
-    adata.obsm['X_niche'] = l2norm(adata.obsm[emb_key])
-    sc.pp.neighbors(adata, use_rep='X_niche', n_neighbors=n_neighbors, metric='cosine')
-    sc.tl.leiden(adata, resolution=resolution, random_state=random_state, key_added=key_added)
-
-
-def compute_npr_score(target_full, global_adata, target_slice,
-                      leiden_key='leiden', min_local=10, high_threshold=3,
-                      score_key='npr_score'):
-    """Niche Prevalence Ratio: NPR(c) = (n_c_global/N_global) / (n_c_local/N_local).
-    Clusters with fewer than `min_local` local spots get score 0. A spatial
-    filter then drops isolated high-score spots. Non-tumor spots get 0.
-    Writes the filtered scores to `target_full.obs[score_key]`; returns the
-    per-cluster (unfiltered) NPR dict."""
-    from scipy.spatial import cKDTree
-    g = global_adata
-    mask = g.obs['slice'] == target_slice
-    key2leiden = dict(zip(zip(g.obs.loc[mask, 'array_row'],
-                              g.obs.loc[mask, 'array_col']),
-                          g.obs.loc[mask, leiden_key]))
-    local_labels = np.array([key2leiden.get((r, c), '-1') for r, c
-                              in zip(target_full.obs['array_row'],
-                                     target_full.obs['array_col'])])
-    is_tumor = local_labels != '-1'
-    n_local, n_global = is_tumor.sum(), len(g)
-    global_labels = g.obs[leiden_key].values
-    cl_score = {}
-    for cl in np.unique(local_labels):
-        if cl == '-1':
-            continue
-        n_local_cl = (local_labels == cl).sum()
-        n_global_cl = (global_labels == cl).sum()
-        local_frac = n_local_cl / n_local
-        global_frac = n_global_cl / n_global
-        cl_score[cl] = (global_frac / local_frac) if (local_frac > 0 and n_local_cl >= min_local) else 0
-    scores = np.array([cl_score.get(lab, 0) for lab in local_labels])
-    coords = target_full.obsm['spatial']
-    tree = cKDTree(coords)
-    _, dists = tree.query(coords, k=2)
-    radius = np.median(dists[:, 1]) * 1.5
-    scores_filtered = scores.copy()
-    for i in np.where(scores > high_threshold)[0]:
-        nbrs = tree.query_ball_point(coords[i], radius)
-        n_high = sum(scores[j] > high_threshold for j in nbrs if j != i)
-        if n_high < 3:
-            scores_filtered[i] = 0
-    target_full.obs[score_key] = scores_filtered
-    return cl_score
-
-
 def score_query_by_groups(model, model_param, adata_list, query_embeddings,
                           group_dict, prefix='score_', device='cuda:0'):
     """For each adata, write `obs[prefix + group]` = mean cosine similarity of
@@ -1217,8 +1129,8 @@ def plot_queried_tls_region_spatial(adata_list, key='queried_tls_region', palett
     if palette is None:
         palette = {'Else':    '#eeeeee',
                    'Type A':  '#d7263d',
-                   'Type B1': '#39c6d6',
-                   'Type B2': '#23ce6b'}
+                   'Type B':  '#39c6d6',
+                   'Type C':  '#23ce6b'}
     fig, axes = plt.subplots(1, len(adata_list),
                              figsize=(figsize[0] * len(adata_list), figsize[1]))
     if len(adata_list) == 1:
@@ -1229,69 +1141,3 @@ def plot_queried_tls_region_spatial(adata_list, key='queried_tls_region', palett
                       title=sid, frameon=False, spot_size=75)
     plt.tight_layout()
     plt.show()
-
-
-def plot_npr_spatial(adata, score_key='npr_score', title=None, figsize=(6, 6)):
-    """Spatial scatter of `obs[score_key]` with the canonical purple-yellow colormap."""
-    import matplotlib.colors as mcolors
-    cmap = mcolors.LinearSegmentedColormap.from_list(
-        'npr', ['#210c52', '#217b9c', '#22b5af', '#ebec23'])
-    fig, ax = plt.subplots(figsize=figsize)
-    sc.pl.spatial(adata, color=score_key, cmap=cmap,
-                  vmin=0, vmax=max(adata.obs[score_key].max(), 1.0),
-                  ax=ax, show=False, title=title or score_key, frameon=False)
-    plt.tight_layout()
-    plt.show()
-
-
-def plot_noi_query(adata_list, sample_ids, global_adata, noi_spots,
-                    leiden_key='leiden', palette=None, figsize=(36, 6)):
-    """Auto-infer the niche pattern that `noi_spots` mostly belong to, then                                                              
-    project all spots of that pattern onto every slice spatially.          
-                                                                                                                                        
-    Each spot is categorized as Queried (in target niche pattern),
-    Residual (sharing a nodule with a Queried spot), or Other."""                                                                        
-    import pandas as pd                                                                                                                  
-    from matplotlib.lines import Line2D                                                                                                  
-                                                                                                                                        
-    pattern_lookup = {(r['slice'], r['array_row'], r['array_col']): r[leiden_key]                                                        
-                    for _, r in global_adata.obs.iterrows()}                                                                           
-                                                            
-    # Auto-infer target niche pattern: the one most NOI spots belong to                                                                  
-    noi_patterns = [pattern_lookup.get(k) for k in noi_spots]                                                                            
-    noi_patterns = [p for p in noi_patterns if p is not None]
-    target_pattern = pd.Series(noi_patterns).value_counts().idxmax()                                                                     
-                                                                                                                                        
-    # All nodules (across every slice) that contain at least one Queried spot
-    involved_nodules = set()                                                                                                             
-    for sid, ad in zip(sample_ids, adata_list):
-        for _, r in ad.obs.iterrows():                                                                                                   
-            if pattern_lookup.get((sid, r['array_row'], r['array_col'])) == target_pattern:
-                involved_nodules.add((sid, r['histo_annotation']))                                                                       
-                                                                
-    if palette is None:                                                                                                                  
-        palette = {'Other': '#4d3d75', 'Residual': '#4ec4bf', 'Queried': '#eff04f'}
-                                                                                                                                        
-    fig, axes = plt.subplots(1, len(sample_ids), figsize=figsize)                                                                        
-    for i, (sid, ad) in enumerate(zip(sample_ids, adata_list)):  
-        status = []                                                                                                                      
-        for _, r in ad.obs.iterrows():                                                                                                   
-            p = pattern_lookup.get((sid, r['array_row'], r['array_col']))
-            if p == target_pattern:                                                                                                      
-                status.append('Queried')
-            elif (sid, r['histo_annotation']) in involved_nodules:                                                                       
-                status.append('Residual')                         
-            else:                                                                                                                        
-                status.append('Other')
-        ad.obs['NOI'] = pd.Categorical(status, categories=['Other', 'Residual', 'Queried'])
-        sc.pl.spatial(ad, color='NOI', palette=palette, ax=axes[i], show=False,                                                          
-                    title=f'{sid}', frameon=False, legend_loc='none')
-                                                                                                                                        
-    handles = [Line2D([0], [0], marker='o', color='w', markerfacecolor=c, markersize=8, label=l)                                         
-                for l, c in [(f'Queried (niche pattern {target_pattern})', palette['Queried']),                                           
-                            ('Residual', palette['Residual']),                                                                           
-                            ('Other', palette['Other'])]]                                                                                
-    fig.legend(handles=handles, loc='lower center', ncol=3, fontsize=11, framealpha=0.8)                                                 
-    plt.tight_layout(rect=[0, 0.04, 1, 0.97])                                                                                            
-    plt.show()                            
-    
